@@ -16,6 +16,7 @@ import {
   type WalletActivityKind,
   type WalletType,
 } from "@/lib/app-store";
+import { t } from "@/lib/i18n";
 
 export const Route = createFileRoute("/wallet")({
   head: () => ({
@@ -62,13 +63,40 @@ const WALLET_ICON: Record<WalletType, string> = {
 const AMOUNT_MAX = 1_000_000_000_000;
 
 function Wallet() {
-  const { wallets, walletActivity, addWallet, topUpWallet, transferBetweenWallets } = useApp();
+  const {
+    wallets,
+    walletActivity,
+    addWallet,
+    topUpWallet,
+    transferBetweenWallets,
+    transactions,
+    settings,
+    locked,
+    unlockApp,
+    language,
+  } = useApp();
   const [addOpen, setAddOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState<null | "topup" | "transfer">(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<"all" | WalletActivityKind>("all");
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const copy = t(language);
 
   const combined = useMemo(() => wallets.reduce((sum, w) => sum + w.balance, 0), [wallets]);
+
+  const grouped = useMemo(
+    () =>
+      (["cash", "bank", "ewallet"] as WalletType[]).map((type) => ({
+        type,
+        items: wallets.filter((w) => w.type === type),
+      })),
+    [wallets],
+  );
+
+  const historyWallet = useMemo(
+    () => wallets.find((w) => w.id === historyId) ?? null,
+    [wallets, historyId],
+  );
 
   const visibleActivity = useMemo(
     () =>
@@ -82,6 +110,30 @@ function Wallet() {
     e.stopPropagation();
     setAddOpen(true);
   }, []);
+
+  // App Lock gate: the Wallet page is challenged before any balance is shown.
+  if (settings.biometricLock && locked) {
+    return (
+      <AppShell topBar={<TopBar eyebrow="Keamanan" title={copy.lockedTitle} />}>
+        <div className="glass-card flex flex-col items-center gap-4 rounded-[24px] p-8 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-container/30 text-primary">
+            <Icon name="fingerprint" className="text-[32px]" fill={1} />
+          </span>
+          <h2 className="m-0 text-title text-on-surface">{copy.lockedTitle}</h2>
+          <p className="m-0 text-body text-on-surface-variant">{copy.lockedBody}</p>
+          <button
+            type="button"
+            data-testid="wallet-unlock"
+            autoFocus
+            onClick={() => unlockApp()}
+            className="gradient-primary h-12 w-full max-w-xs rounded-full text-[13px] font-bold text-on-primary-container transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            {copy.unlock}
+          </button>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell topBar={<TopBar eyebrow="Keuangan Anda" title="Dompet" />}>
@@ -134,24 +186,47 @@ function Wallet() {
             Tambah Kantong
           </button>
         </div>
-        <div className="glass-card rounded-[16px] px-4">
-          {wallets.map((w) => (
-            <div
-              key={w.id}
-              className="flex items-center gap-3 border-b border-outline-variant/20 py-3 last:border-0"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-variant text-primary">
-                <Icon name={WALLET_ICON[w.type]} className="text-[20px]" />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-body font-medium text-on-surface">{w.name}</span>
-                <span className="truncate text-meta text-on-surface-variant/80">
-                  {w.provider ? `${WALLET_TYPE_LABEL[w.type]} · ${w.provider}` : WALLET_TYPE_LABEL[w.type]}
-                </span>
+        <div className="flex flex-col gap-3">
+          {grouped.map((group) => (
+            <div key={group.type}>
+              <h3 className="mb-1.5 text-label uppercase text-primary">
+                {WALLET_TYPE_LABEL[group.type]}
+              </h3>
+              <div className="glass-card rounded-[16px] px-4">
+                {group.items.length ? (
+                  group.items.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      data-testid={`wallet-account-${w.id}`}
+                      aria-haspopup="dialog"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHistoryId(w.id);
+                      }}
+                      className="flex w-full items-center gap-3 border-b border-outline-variant/20 py-3 text-left last:border-0 focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-variant text-primary">
+                        <Icon name={WALLET_ICON[w.type]} className="text-[20px]" />
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-body font-medium text-on-surface">
+                          {w.name}
+                        </span>
+                        <span className="truncate text-meta text-on-surface-variant/80">
+                          {w.provider ?? WALLET_TYPE_LABEL[w.type]}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-body font-semibold text-on-surface">
+                        {formatIDR(w.balance)}
+                      </span>
+                      <Icon name="chevron_right" className="text-[18px] text-on-surface-variant" />
+                    </button>
+                  ))
+                ) : (
+                  <p className="py-3 text-meta text-on-surface-variant/70">—</p>
+                )}
               </div>
-              <span className="shrink-0 text-body font-semibold text-on-surface">
-                {formatIDR(w.balance)}
-              </span>
             </div>
           ))}
         </div>
@@ -256,7 +331,129 @@ function Wallet() {
           }}
         />
       ) : null}
+
+      {historyWallet ? (
+        <AccountHistorySheet
+          wallet={historyWallet}
+          rows={transactions.filter((tx) => tx.walletId === historyWallet.id)}
+          emptyLabel={copy.accountHistoryEmpty}
+          title={copy.accountHistory}
+          onClose={() => setHistoryId(null)}
+        />
+      ) : null}
     </AppShell>
+  );
+}
+
+/** Per-account history: every transaction that moves this account's balance. */
+function AccountHistorySheet({
+  wallet,
+  rows,
+  title,
+  emptyLabel,
+  onClose,
+}: {
+  wallet: WalletAccount;
+  rows: { id: string; type: "income" | "expense"; amount: number; category: string; note: string; date: string }[];
+  title: string;
+  emptyLabel: string;
+  onClose: () => void;
+}) {
+  const ref = useModalA11y<HTMLDivElement>(true, onClose);
+  const sorted = useMemo(
+    () => [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [rows],
+  );
+
+  return (
+    <SheetPortal>
+      <div
+        className="fixed inset-0 z-[180] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      >
+        <div
+          ref={ref}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${title} ${wallet.name}`}
+          data-testid="wallet-history-sheet"
+          onClick={(e) => e.stopPropagation()}
+          className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-[26px] border-t border-outline-variant/20 bg-surface-container-high p-5 pb-[calc(env(safe-area-inset-bottom,0px)+20px)] shadow-2xl"
+        >
+          <span
+            aria-hidden="true"
+            className="mx-auto mb-3 block h-1 w-10 rounded-full bg-outline-variant/60"
+          />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="m-0 truncate text-title text-on-surface">{wallet.name}</h3>
+              <p className="mt-0.5 text-meta text-on-surface-variant/80">
+                {`${title} · ${wallet.provider ?? WALLET_TYPE_LABEL[wallet.type]}`}
+              </p>
+            </div>
+            <span className="shrink-0 text-body font-bold text-on-surface">
+              {formatIDR(wallet.balance)}
+            </span>
+          </div>
+
+          {sorted.length ? (
+            <ul className="mt-4 list-none rounded-2xl bg-surface-container px-4 py-1">
+              {sorted.map((tx) => (
+                <li
+                  key={tx.id}
+                  className="flex items-center gap-3 border-b border-outline-variant/20 py-3 last:border-0"
+                >
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                      tx.type === "income"
+                        ? "bg-success/15 text-success"
+                        : "bg-error/15 text-error"
+                    }`}
+                  >
+                    <Icon
+                      name={tx.type === "income" ? "south_west" : "north_east"}
+                      className="text-[18px]"
+                    />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-body font-medium text-on-surface">
+                      {tx.category}
+                    </span>
+                    <span className="truncate text-meta text-on-surface-variant/80">
+                      {tx.note || "-"}
+                    </span>
+                    <span className="text-meta text-on-surface-variant/60">
+                      {new Date(tx.date).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 text-body font-semibold ${
+                      tx.type === "income" ? "text-success" : "text-error"
+                    }`}
+                  >
+                    {`${tx.type === "income" ? "+" : "-"}${formatIDR(tx.amount)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 text-center text-[12px] text-on-surface-variant/70">{emptyLabel}</p>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-5 h-12 w-full rounded-full bg-surface-variant text-[13px] font-semibold text-on-surface-variant transition-transform active:scale-95"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+    </SheetPortal>
   );
 }
 
