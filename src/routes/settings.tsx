@@ -134,9 +134,10 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function SettingsPage() {
-  const { user, logout, settings, language } = useApp();
+  const { user, logout, settings, language, categories } = useApp();
   const navigate = useNavigate();
   const copy = t(language);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   return (
     <AppShell topBar={<TopBar eyebrow={copy.settingsEyebrow} title={copy.settingsTitle} />}>
@@ -202,8 +203,11 @@ function SettingsPage() {
         <Row
           icon="category"
           title={copy.categories}
-          subtitle={copy.categoriesHint}
+          subtitle={
+            categories.length ? `${categories.length} · ${copy.manage}` : copy.categoriesEmpty
+          }
           trailing={Chevron}
+          onClick={() => setCategoryOpen(true)}
         />
         <Row
           icon="download"
@@ -225,6 +229,158 @@ function SettingsPage() {
       <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-[16px] border border-error/30 py-4 text-base font-semibold text-error">
         <Icon name="delete" className="text-[20px]" /> {copy.deleteAccount}
       </button>
+
+      {categoryOpen ? <CategorySheet onClose={() => setCategoryOpen(false)} /> : null}
     </AppShell>
+  );
+}
+
+/** Manage user-owned transaction categories (empty by default). */
+function CategorySheet({ onClose }: { onClose: () => void }) {
+  const { language, categories, addCategory, deleteCategory, wallets } = useApp();
+  const copy = t(language);
+  const ref = useModalA11y<HTMLDivElement>(true, onClose);
+  const [type, setType] = useState<TxType>("expense");
+  const [name, setName] = useState("");
+  const [walletId, setWalletId] = useState("");
+  const [error, setError] = useState<string | undefined>(undefined);
+
+  const list = categories.filter((c) => c.type === type);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = addCategory({ name, type, ...(walletId ? { walletId } : {}) });
+    if (!ok) return setError(copy.invalidCategory);
+    setName("");
+    setError(undefined);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[180] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label={copy.categories}
+        data-testid="category-sheet"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-[26px] border-t border-outline-variant/20 bg-surface-container-high p-5 pb-[calc(env(safe-area-inset-bottom,0px)+20px)] shadow-2xl"
+      >
+        <span
+          aria-hidden="true"
+          className="mx-auto mb-3 block h-1 w-10 rounded-full bg-outline-variant/60"
+        />
+        <div className="flex items-center justify-between">
+          <h3 className="m-0 text-title text-on-surface">{copy.categories}</h3>
+          <button
+            type="button"
+            aria-label={copy.close}
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-variant text-on-surface-variant"
+          >
+            <Icon name="close" className="text-[18px]" />
+          </button>
+        </div>
+
+        <div
+          className="mt-4 grid grid-cols-2 gap-2 rounded-full bg-surface-container p-1"
+          role="tablist"
+          aria-label={copy.categories}
+        >
+          {(["income", "expense"] as TxType[]).map((tp) => (
+            <button
+              key={tp}
+              type="button"
+              role="tab"
+              aria-selected={type === tp}
+              onClick={() => setType(tp)}
+              className={`rounded-full py-2 text-sm font-semibold transition-colors ${
+                type === tp ? "bg-primary-container/40 text-primary" : "text-on-surface-variant"
+              }`}
+            >
+              {tp === "income" ? copy.income : copy.expense}
+            </button>
+          ))}
+        </div>
+
+        <form className="mt-4 flex flex-col gap-3" onSubmit={submit} noValidate>
+          <label className="flex flex-col gap-1">
+            <span className="text-meta text-on-surface-variant/80">{copy.categoryName}</span>
+            <input
+              value={name}
+              maxLength={24}
+              data-testid="category-name"
+              aria-invalid={!!error}
+              onChange={(e) => setName(e.target.value)}
+              className="h-12 rounded-2xl border border-outline-variant/30 bg-surface-container px-4 text-[14px] text-on-surface outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-meta text-on-surface-variant/80">{copy.categoryScope}</span>
+            <select
+              value={walletId}
+              data-testid="category-scope"
+              onChange={(e) => setWalletId(e.target.value)}
+              className="h-12 rounded-2xl border border-outline-variant/30 bg-surface-container px-4 text-[14px] text-on-surface outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              <option value="">{copy.allAccounts}</option>
+              {wallets.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {`${w.name} · ${WALLET_TYPE_LABEL[w.type]}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          {error ? (
+            <p role="alert" className="m-0 text-[11px] font-semibold text-error">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            data-testid="category-submit"
+            className="gradient-primary h-12 rounded-full text-[13px] font-bold text-on-primary-container transition-transform active:scale-95"
+          >
+            {copy.addCategory}
+          </button>
+        </form>
+
+        <ul className="mt-4 list-none rounded-2xl bg-surface-container px-4 py-1">
+          {list.length ? (
+            list.map((c) => {
+              const scope = c.walletId
+                ? wallets.find((w) => w.id === c.walletId)?.name ?? copy.allAccounts
+                : copy.allAccounts;
+              return (
+                <li
+                  key={c.id}
+                  className="flex items-center gap-3 border-b border-outline-variant/20 py-3 last:border-0"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-medium text-on-surface">{c.name}</span>
+                    <span className="truncate text-[11px] text-on-surface-variant/80">{scope}</span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`${copy.delete} ${c.name}`}
+                    onClick={() => deleteCategory(c.id)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-variant text-error"
+                  >
+                    <Icon name="delete" className="text-[18px]" />
+                  </button>
+                </li>
+              );
+            })
+          ) : (
+            <li className="py-4 text-center text-[12px] text-on-surface-variant/70">
+              {copy.categoriesEmpty}
+            </li>
+          )}
+        </ul>
+      </div>
+    </div>
   );
 }
