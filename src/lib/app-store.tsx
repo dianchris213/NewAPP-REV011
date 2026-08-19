@@ -228,6 +228,13 @@ type AppState = {
   setAddTxOpen: (open: boolean) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
+  categories: Category[];
+  addCategory: (input: { name: string; type: TxType; walletId?: string }) => boolean;
+  deleteCategory: (id: string) => void;
+  categoriesFor: (type: TxType, walletId?: string) => Category[];
+  locked: boolean;
+  unlockApp: (pin?: string) => boolean;
+  lockApp: () => void;
   wallets: Wallet[];
   walletActivity: WalletActivity[];
   addWallet: (input: { name: string; type: WalletType; provider?: string; balance: number }) => void;
@@ -248,6 +255,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [language, setLanguage] = useState<Language>("id");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [locked, setLocked] = useState(false);
   const [wallets, setWallets] = useState<Wallet[]>(seedWallets);
   const [walletActivity, setWalletActivity] = useState<WalletActivity[]>(seedWalletActivity);
   const [addTxOpen, setAddTxOpen] = useState(false);
@@ -255,6 +264,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [txFilters, setTxFiltersState] = useState<TxFilters>(defaultTxFilters);
   const [notifications] = useState<AppNotification[]>(defaultNotifications);
   const [unreadCount, setUnreadCount] = useState(defaultNotifications.length);
+
+  const addCategory = useCallback(
+    (input: { name: string; type: TxType; walletId?: string }) => {
+      const name = input.name.trim().replace(/\s+/g, " ");
+      if (name.length < 2 || name.length > 24) return false;
+      let ok = false;
+      setCategories((prev) => {
+        const duplicate = prev.some(
+          (c) =>
+            c.type === input.type &&
+            c.name.toLowerCase() === name.toLowerCase() &&
+            (c.walletId ?? "") === (input.walletId ?? ""),
+        );
+        if (duplicate) return prev;
+        ok = true;
+        return [
+          ...prev,
+          {
+            id: `c${Date.now()}${Math.round(Math.random() * 1000)}`,
+            name,
+            type: input.type,
+            ...(input.walletId ? { walletId: input.walletId } : {}),
+          },
+        ];
+      });
+      return ok;
+    },
+    [],
+  );
+
+  const deleteCategory = useCallback((id: string) => {
+    if (!id) return;
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const categoriesFor = useCallback(
+    (type: TxType, walletId?: string) =>
+      categories.filter(
+        (c) => c.type === type && (!c.walletId || (!!walletId && c.walletId === walletId)),
+      ),
+    [categories],
+  );
+
+  const unlockApp = useCallback(() => {
+    setLocked(false);
+    return true;
+  }, []);
+
+  const lockApp = useCallback(() => setLocked(true), []);
 
   const addWallet = useCallback(
     (input: { name: string; type: WalletType; provider?: string; balance: number }) => {
