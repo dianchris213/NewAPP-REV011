@@ -445,6 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           language?: Language;
           wallets?: Wallet[];
           walletActivity?: WalletActivity[];
+          categories?: Category[];
         };
         setUser(parsed.user ?? null);
         if (parsed.transactions?.length) {
@@ -459,6 +460,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsed.language === "id" || parsed.language === "en") setLanguage(parsed.language);
         if (parsed.wallets?.length) setWallets(parsed.wallets);
         if (parsed.walletActivity?.length) setWalletActivity(parsed.walletActivity);
+        if (Array.isArray(parsed.categories)) setCategories(parsed.categories);
+        if (parsed.settings?.biometricLock) setLocked(true);
       } else {
         setTransactions(seedTransactions());
       }
@@ -476,14 +479,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         window.localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ user, transactions, settings, language, wallets, walletActivity }),
+          JSON.stringify({
+            user,
+            transactions,
+            settings,
+            language,
+            wallets,
+            walletActivity,
+            categories,
+          }),
         );
       } catch {
         /* ignore quota errors */
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [hydrated, user, transactions, settings, language, wallets, walletActivity]);
+  }, [hydrated, user, transactions, settings, language, wallets, walletActivity, categories]);
 
   // Apply the theme switch to the document so the toggle is visually real.
   useEffect(() => {
@@ -558,7 +569,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleSetting = useCallback((key: keyof Settings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+    setSettings((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      // Turning App Lock off must immediately release any active challenge.
+      if (key === "biometricLock" && !next.biometricLock) setLocked(false);
+      return next;
+    });
   }, []);
 
   const { totalIncome, totalExpense } = useMemo(() => {
@@ -604,6 +620,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAddTxOpen,
       language,
       setLanguage,
+      categories,
+      addCategory,
+      deleteCategory,
+      categoriesFor,
+      locked,
+      unlockApp,
+      lockApp,
       wallets,
       walletActivity,
       addWallet,
@@ -637,6 +660,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       toggleSetting,
       language,
+      categories,
+      addCategory,
+      deleteCategory,
+      categoriesFor,
+      locked,
+      unlockApp,
+      lockApp,
       wallets,
       walletActivity,
       addWallet,
