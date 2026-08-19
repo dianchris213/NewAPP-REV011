@@ -571,8 +571,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleSetting = useCallback((key: keyof Settings) => {
     setSettings((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      // Turning App Lock off must immediately release any active challenge.
-      if (key === "biometricLock" && !next.biometricLock) setLocked(false);
+      // App Lock arms/releases the challenge immediately.
+      if (key === "biometricLock") setLocked(next.biometricLock);
       return next;
     });
   }, []);
