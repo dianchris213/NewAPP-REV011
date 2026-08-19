@@ -1,12 +1,20 @@
 import { useCallback, useMemo, useState } from "react";
-import { formatIDR, useApp, type TxType } from "@/lib/app-store";
+import {
+  formatIDR,
+  useApp,
+  WALLET_TYPE_LABEL,
+  type TxType,
+  type WalletType,
+} from "@/lib/app-store";
 import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { Icon } from "./Icon";
 
-const categories: Record<TxType, string[]> = {
-  income: ["Gaji", "Freelance", "Bonus", "Hadiah", "Lainnya"],
-  expense: ["Makanan", "Transport", "Tagihan", "Belanja", "Hiburan", "Lainnya"],
-};
+/** Only these three wallet families can fund/receive a transaction. */
+const ALLOWED_WALLET_TYPES: { value: WalletType; icon: string }[] = [
+  { value: "cash", icon: "payments" },
+  { value: "bank", icon: "account_balance" },
+  { value: "ewallet", icon: "wallet" },
+];
 
 const NOTE_MAX = 80;
 const AMOUNT_MAX = 1_000_000_000_000;
@@ -19,20 +27,20 @@ const todayInput = () => {
 
 type Errors = {
   amount?: string;
+  wallet?: string;
   category?: string;
   date?: string;
-  note?: string;
-  wallet?: string;
 };
 
 export function AddTransactionSheet() {
-  const { addTxOpen, setAddTxOpen, addTransaction, wallets } = useApp();
+  const { addTxOpen, setAddTxOpen, addTransaction, wallets, categoriesFor } = useApp();
   const [type, setType] = useState<TxType>("expense");
   const [amount, setAmount] = useState("");
+  const [walletType, setWalletType] = useState<WalletType | null>(null);
+  const [walletId, setWalletId] = useState("");
   const [category, setCategory] = useState("");
   const [date, setDate] = useState(todayInput);
   const [note, setNote] = useState("");
-  const [walletId, setWalletId] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -42,23 +50,35 @@ export function AddTransactionSheet() {
   const numeric = Number(amount.replace(/\D/g, "")) || 0;
   const trimmedNote = note.trim();
 
+  const subWallets = useMemo(
+    () => (walletType ? wallets.filter((w) => w.type === walletType) : []),
+    [wallets, walletType],
+  );
+  const availableCategories = useMemo(
+    () => categoriesFor(type, walletId || undefined),
+    [categoriesFor, type, walletId],
+  );
+
+  // Strict progressive disclosure: 1 Amount, 2 Wallet, 3 Category, 4 Date, 5 Note.
+  const step1Done = numeric > 0 && numeric <= AMOUNT_MAX;
+  const step2Done = step1Done && !!walletId && wallets.some((w) => w.id === walletId);
+  const step3Done = step2Done && !!category;
+  const step4Done = step3Done && !!date && !Number.isNaN(new Date(date).getTime());
+
   const validate = useCallback((): Errors => {
     const next: Errors = {};
-    if (!amount.replace(/\D/g, "")) next.amount = "Nominal wajib diisi.";
-    else if (numeric <= 0) next.amount = "Nominal harus lebih besar dari 0.";
+    if (!numeric) next.amount = "Nominal wajib diisi.";
     else if (numeric > AMOUNT_MAX) next.amount = "Nominal terlalu besar.";
-    if (!category) next.category = "Kategori wajib dipilih.";
-    if (!date) next.date = "Tanggal wajib diisi.";
-    else if (Number.isNaN(new Date(date).getTime())) next.date = "Tanggal tidak valid.";
-    if (!trimmedNote) next.note = "Catatan singkat wajib diisi.";
-    if (!walletId) next.wallet = "Pilih akun dompet tujuan.";
+    if (!walletId) next.wallet = "Pilih akun dompet.";
     else if (!wallets.some((w) => w.id === walletId)) next.wallet = "Akun dompet tidak valid.";
     else if (type === "expense") {
       const wallet = wallets.find((w) => w.id === walletId);
       if (wallet && wallet.balance < numeric) next.wallet = "Saldo akun tidak mencukupi.";
     }
+    if (!category) next.category = "Kategori wajib dipilih.";
+    if (!date || Number.isNaN(new Date(date).getTime())) next.date = "Tanggal tidak valid.";
     return next;
-  }, [amount, numeric, category, date, trimmedNote, walletId, wallets, type]);
+  }, [numeric, walletId, wallets, type, category, date]);
 
   const liveErrors = useMemo(
     () => (submitted ? validate() : errors),
@@ -70,6 +90,7 @@ export function AddTransactionSheet() {
     setNote("");
     setCategory("");
     setWalletId("");
+    setWalletType(null);
     setDate(todayInput());
     setType("expense");
     setErrors({});
@@ -155,9 +176,8 @@ export function AddTransactionSheet() {
           ))}
         </div>
 
-        <label className="text-label uppercase text-on-surface-variant" htmlFor="tx-amount">
-          Nominal
-        </label>
+        {/* Step 1 — Amount */}
+        <StepLabel step={1} htmlFor="tx-amount" text="Nominal" />
         <div
           className={`mt-1 flex items-center gap-2 rounded-[16px] border bg-surface-container-low px-4 py-3 ${
             liveErrors.amount ? "border-error" : "border-outline-variant/30"
@@ -179,108 +199,211 @@ export function AddTransactionSheet() {
         </div>
         <InlineError id="tx-amount-error" message={liveErrors.amount} />
 
-        <span className="mt-4 block text-label uppercase text-on-surface-variant">Kategori</span>
-        <div
-          className="mt-2 flex gap-2 swipe-x"
-          role="group"
-          aria-label="Kategori"
-          aria-invalid={!!liveErrors.category}
-        >
-          {categories[type].map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-pressed={category === c}
-              onClick={() => setCategory(c)}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${
-                category === c
-                  ? "border-primary bg-primary-container/25 text-primary"
-                  : liveErrors.category
-                    ? "border-error/60 text-on-surface-variant"
-                    : "border-outline-variant/30 text-on-surface-variant"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-        <InlineError id="tx-category-error" message={liveErrors.category} />
+        {/* Step 2 — Wallet type then registered sub-account */}
+        <Step enabled={step1Done} hint="Isi nominal terlebih dahulu.">
+          <StepLabel step={2} text="Akun Dompet" />
+          <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Jenis akun">
+            {ALLOWED_WALLET_TYPES.map((t) => {
+              const active = walletType === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`tx-wallet-type-${t.value}`}
+                  onClick={() => {
+                    setWalletType(t.value);
+                    setWalletId("");
+                    setCategory("");
+                  }}
+                  className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border px-1 text-center transition-colors ${
+                    active
+                      ? "border-primary bg-primary-container/25 text-primary"
+                      : "border-outline-variant/30 text-on-surface-variant"
+                  }`}
+                >
+                  <Icon name={t.icon} className="text-[20px]" fill={active ? 1 : 0} />
+                  <span className="text-[11px] font-semibold leading-tight">
+                    {WALLET_TYPE_LABEL[t.value]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-        <label className="mt-4 block text-label uppercase text-on-surface-variant" htmlFor="tx-wallet">
-          Akun Dompet
-        </label>
-        <select
-          id="tx-wallet"
-          value={walletId}
-          data-testid="tx-wallet-select"
-          aria-invalid={!!liveErrors.wallet}
-          aria-describedby="tx-wallet-error"
-          onChange={(e) => setWalletId(e.target.value)}
-          className={`mt-1 w-full rounded-[16px] border bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none ${
-            liveErrors.wallet ? "border-error" : "border-outline-variant/30"
-          }`}
-        >
-          <option value="">Pilih akun...</option>
-          {wallets.map((w) => (
-            <option key={w.id} value={w.id}>
-              {`${w.name} · ${formatIDR(w.balance)}`}
-            </option>
-          ))}
-        </select>
-        <InlineError id="tx-wallet-error" message={liveErrors.wallet} />
+          {walletType ? (
+            subWallets.length ? (
+              <div className="mt-2 flex flex-col gap-2" role="radiogroup" aria-label="Akun terdaftar">
+                {subWallets.map((w) => {
+                  const active = walletId === w.id;
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      data-testid={`tx-wallet-${w.id}`}
+                      onClick={() => {
+                        setWalletId(w.id);
+                        setCategory("");
+                      }}
+                      className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
+                        active
+                          ? "border-primary bg-primary-container/20"
+                          : "border-outline-variant/30"
+                      }`}
+                    >
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate text-sm font-semibold text-on-surface">
+                          {w.name}
+                        </span>
+                        <span className="truncate text-[11px] text-on-surface-variant/80">
+                          {w.provider ?? WALLET_TYPE_LABEL[w.type]}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold text-on-surface">
+                        {formatIDR(w.balance)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] text-on-surface-variant/70">
+                Belum ada akun {WALLET_TYPE_LABEL[walletType]}. Tambahkan di halaman Dompet.
+              </p>
+            )
+          ) : null}
+          <InlineError id="tx-wallet-error" message={liveErrors.wallet} />
+        </Step>
 
-        <label className="mt-4 block text-label uppercase text-on-surface-variant" htmlFor="tx-date">
-          Tanggal
-        </label>
-        <input
-          id="tx-date"
-          type="date"
-          value={date}
-          data-testid="tx-date-input"
-          aria-invalid={!!liveErrors.date}
-          aria-describedby="tx-date-error"
-          onChange={(e) => setDate(e.target.value)}
-          className={`mt-1 w-full rounded-[16px] border bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none ${
-            liveErrors.date ? "border-error" : "border-outline-variant/30"
-          }`}
-        />
-        <InlineError id="tx-date-error" message={liveErrors.date} />
+        {/* Step 3 — Category (user-managed, may be account-specific) */}
+        <Step enabled={step2Done} hint="Pilih akun dompet terlebih dahulu.">
+          <StepLabel step={3} text="Kategori" />
+          {availableCategories.length ? (
+            <div className="mt-2 flex gap-2 swipe-x" role="group" aria-label="Kategori">
+              {availableCategories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={category === c.name}
+                  onClick={() => setCategory(c.name)}
+                  className={`shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    category === c.name
+                      ? "border-primary bg-primary-container/25 text-primary"
+                      : "border-outline-variant/30 text-on-surface-variant"
+                  }`}
+                >
+                  {c.name}
+                  {c.walletId ? " •" : ""}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-on-surface-variant/70">
+              Belum ada kategori. Tambahkan di Pengaturan → Kategori Transaksi.
+            </p>
+          )}
+          <InlineError id="tx-category-error" message={liveErrors.category} />
+        </Step>
 
-        <label className="mt-4 block text-label uppercase text-on-surface-variant" htmlFor="tx-note">
-          Catatan Singkat
-        </label>
-        <input
-          id="tx-note"
-          value={note}
-          maxLength={NOTE_MAX}
-          data-testid="tx-note-input"
-          aria-invalid={!!liveErrors.note}
-          aria-describedby="tx-note-error"
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={
-            type === "income" ? "Contoh: Gaji bulan ini" : "Contoh: Bensin motor harian"
-          }
-          className={`mt-1 w-full rounded-[16px] border bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none placeholder:text-outline ${
-            liveErrors.note ? "border-error" : "border-outline-variant/30"
-          }`}
-        />
-        {liveErrors.note ? (
-          <InlineError id="tx-note-error" message={liveErrors.note} />
-        ) : (
-          <p id="tx-note-error" className="mt-1 text-[11px] text-on-surface-variant/70">
-            {`Wajib: alasan ${type === "income" ? "pemasukan" : "pengeluaran"} ini.`}
-          </p>
-        )}
+        {/* Step 4 — Date */}
+        <Step enabled={step3Done} hint="Pilih kategori terlebih dahulu.">
+          <StepLabel step={4} htmlFor="tx-date" text="Tanggal" />
+          <input
+            id="tx-date"
+            type="date"
+            value={date}
+            data-testid="tx-date-input"
+            aria-invalid={!!liveErrors.date}
+            aria-describedby="tx-date-error"
+            onChange={(e) => setDate(e.target.value)}
+            className={`mt-1 w-full rounded-[16px] border bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none ${
+              liveErrors.date ? "border-error" : "border-outline-variant/30"
+            }`}
+          />
+          <InlineError id="tx-date-error" message={liveErrors.date} />
+        </Step>
+
+        {/* Step 5 — Optional note */}
+        <Step enabled={step4Done} hint="Isi tanggal terlebih dahulu.">
+          <StepLabel step={5} htmlFor="tx-note" text="Catatan Singkat (opsional)" />
+          <input
+            id="tx-note"
+            value={note}
+            maxLength={NOTE_MAX}
+            data-testid="tx-note-input"
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={
+              type === "income" ? "Contoh: Gaji bulan ini" : "Contoh: Bensin motor harian"
+            }
+            className="mt-1 w-full rounded-[16px] border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none placeholder:text-outline"
+          />
+        </Step>
 
         <button
           type="submit"
           data-testid="tx-submit"
-          className="gradient-primary mt-5 flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-bold text-on-primary-container shadow-glow"
+          disabled={!step4Done}
+          className="gradient-primary mt-5 flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-bold text-on-primary-container shadow-glow transition-opacity disabled:opacity-40"
         >
           <Icon name="check" className="text-[20px]" /> Simpan Transaksi
         </button>
       </form>
     </div>
+  );
+}
+
+function StepLabel({
+  step,
+  text,
+  htmlFor,
+}: {
+  step: number;
+  text: string;
+  htmlFor?: string;
+}) {
+  const content = (
+    <>
+      <span className="mr-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-container/40 text-[10px] font-bold text-primary">
+        {step}
+      </span>
+      {text}
+    </>
+  );
+  if (htmlFor) {
+    return (
+      <label className="mt-4 block text-label uppercase text-on-surface-variant" htmlFor={htmlFor}>
+        {content}
+      </label>
+    );
+  }
+  return (
+    <span className="mt-4 block text-label uppercase text-on-surface-variant">{content}</span>
+  );
+}
+
+function Step({
+  enabled,
+  hint,
+  children,
+}: {
+  enabled: boolean;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset
+      disabled={!enabled}
+      aria-disabled={!enabled}
+      className={`m-0 border-0 p-0 transition-opacity ${enabled ? "opacity-100" : "opacity-40"}`}
+    >
+      {children}
+      {!enabled ? (
+        <p className="mt-1 text-[11px] text-on-surface-variant/70">{hint}</p>
+      ) : null}
+    </fieldset>
   );
 }
 
