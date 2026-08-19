@@ -30,6 +30,24 @@ type Dict = {
   exportHint: string;
   logout: string;
   deleteAccount: string;
+  manage: string;
+  categoriesEmpty: string;
+  addCategory: string;
+  categoryName: string;
+  categoryScope: string;
+  allAccounts: string;
+  income: string;
+  expense: string;
+  save: string;
+  cancel: string;
+  close: string;
+  delete: string;
+  invalidCategory: string;
+  lockedTitle: string;
+  lockedBody: string;
+  unlock: string;
+  accountHistory: string;
+  accountHistoryEmpty: string;
 };
 
 const dictionaries: Record<Language, Dict> = {
@@ -63,6 +81,24 @@ const dictionaries: Record<Language, Dict> = {
     exportHint: "Unduh laporan",
     logout: "Keluar Akun",
     deleteAccount: "Hapus Akun & Data",
+    manage: "Kelola",
+    categoriesEmpty: "Belum ada kategori. Tambahkan kategori Anda sendiri.",
+    addCategory: "Tambah Kategori",
+    categoryName: "Nama Kategori",
+    categoryScope: "Berlaku Untuk",
+    allAccounts: "Semua akun",
+    income: "Pemasukan",
+    expense: "Pengeluaran",
+    save: "Simpan",
+    cancel: "Batal",
+    close: "Tutup",
+    delete: "Hapus",
+    invalidCategory: "Nama kategori 2-24 karakter dan tidak boleh duplikat.",
+    lockedTitle: "Dompet Terkunci",
+    lockedBody: "Verifikasi identitas Anda untuk membuka halaman Dompet.",
+    unlock: "Buka dengan Biometrik",
+    accountHistory: "Riwayat Akun",
+    accountHistoryEmpty: "Belum ada transaksi pada akun ini.",
   },
   en: {
     settingsEyebrow: "Configuration",
@@ -94,6 +130,24 @@ const dictionaries: Record<Language, Dict> = {
     exportHint: "Download report",
     logout: "Sign Out",
     deleteAccount: "Delete Account & Data",
+    manage: "Manage",
+    categoriesEmpty: "No categories yet. Add your own to get started.",
+    addCategory: "Add Category",
+    categoryName: "Category Name",
+    categoryScope: "Applies To",
+    allAccounts: "All accounts",
+    income: "Income",
+    expense: "Expense",
+    save: "Save",
+    cancel: "Cancel",
+    close: "Close",
+    delete: "Delete",
+    invalidCategory: "Category name must be 2-24 characters and unique.",
+    lockedTitle: "Wallet Locked",
+    lockedBody: "Verify your identity to open the Wallet page.",
+    unlock: "Unlock with Biometrics",
+    accountHistory: "Account History",
+    accountHistoryEmpty: "No transactions on this account yet.",
   },
 };
 
