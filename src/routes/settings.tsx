@@ -1,7 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { AppShell, TopBar } from "@/components/AppShell";
 import { Icon } from "@/components/Icon";
-import { useApp, type Language, type Settings as SettingsState } from "@/lib/app-store";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
+import {
+  useApp,
+  WALLET_TYPE_LABEL,
+  type Language,
+  type Settings as SettingsState,
+  type TxType,
+} from "@/lib/app-store";
 import { t } from "@/lib/i18n";
 
 export const Route = createFileRoute("/settings")({
@@ -27,23 +35,29 @@ function Row({
   title,
   subtitle,
   trailing,
+  onClick,
 }: {
   icon: string;
   title: string;
   subtitle?: string;
   trailing: React.ReactNode;
+  onClick?: () => void;
 }) {
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="flex items-center gap-3 border-b border-outline-variant/20 py-3 last:border-0">
+    <Wrapper
+      {...(onClick ? { type: "button" as const, onClick } : {})}
+      className="flex w-full items-center gap-3 border-b border-outline-variant/20 py-3 text-left last:border-0 focus-visible:ring-2 focus-visible:ring-primary/60"
+    >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-variant text-primary">
         <Icon name={icon} className="text-[20px]" />
       </span>
-      <div className="flex flex-1 flex-col">
+      <span className="flex flex-1 flex-col">
         <span className="text-sm font-medium text-on-surface">{title}</span>
         {subtitle ? <span className="text-xs text-on-surface-variant">{subtitle}</span> : null}
-      </div>
+      </span>
       {trailing}
-    </div>
+    </Wrapper>
   );
 }
 
