@@ -176,6 +176,7 @@ const seedTransactions = (): Transaction[] => {
     category: string,
     note: string,
     daysAgo: number,
+    walletId: string,
   ): Transaction => ({
     id,
     type,
@@ -183,18 +184,19 @@ const seedTransactions = (): Transaction[] => {
     category,
     note,
     date: new Date(now - daysAgo * day).toISOString(),
+    walletId,
   });
   return [
-    mk("s1", "income", 7500000, "Gaji", "Gaji bulanan", 2),
-    mk("s2", "expense", 185000, "Makanan", "Belanja mingguan", 0),
-    mk("s3", "expense", 45000, "Transport", "Ojek online", 0),
-    mk("s4", "expense", 320000, "Tagihan", "Listrik", 5),
-    mk("s5", "income", 1200000, "Freelance", "Proyek desain", 12),
-    mk("s6", "expense", 890000, "Belanja", "Sepatu lari", 40),
-    mk("s7", "expense", 250000, "Hiburan", "Langganan streaming", 120),
-    mk("s8", "income", 2000000, "Bonus", "Bonus kuartal", 200),
+    mk("s1", "income", 7500000, "Gaji", "Gaji bulanan", 2, "w2"),
+    mk("s2", "expense", 185000, "Makanan", "Belanja mingguan", 0, "w1"),
+    mk("s3", "expense", 45000, "Transport", "Ojek online", 0, "w3"),
+    mk("s4", "expense", 320000, "Tagihan", "Listrik", 5, "w2"),
+    mk("s5", "income", 1200000, "Freelance", "Proyek desain", 12, "w2"),
+    mk("s6", "expense", 890000, "Belanja", "Sepatu lari", 40, "w2"),
+    mk("s7", "expense", 250000, "Hiburan", "Langganan streaming", 120, "w3"),
+    mk("s8", "income", 2000000, "Bonus", "Bonus kuartal", 200, "w2"),
     // Mock test transaction with a short note (Catatan Singkat)
-    mk("s9", "expense", 75000, "Makanan", "Catatan singkat: makan siang tim di kantor", 1),
+    mk("s9", "expense", 75000, "Makanan", "Catatan singkat: makan siang tim", 1, "w1"),
   ];
 };
 
