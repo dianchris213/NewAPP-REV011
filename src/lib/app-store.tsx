@@ -75,6 +75,17 @@ export type Settings = {
 
 export type Language = "id" | "en";
 
+/**
+ * Categories are user-owned: the app ships with NONE. A category may be
+ * global (walletId undefined) or routed to one specific wallet account.
+ */
+export type Category = {
+  id: string;
+  name: string;
+  type: TxType;
+  walletId?: string;
+};
+
 export type WalletType = "cash" | "bank" | "ewallet";
 
 export type Wallet = {
